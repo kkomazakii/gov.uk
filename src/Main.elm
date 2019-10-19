@@ -81,8 +81,19 @@ view model =
     { title = "gov.uk contents"
 
     -- you need surrounding bracket
-    , body = [ div [] [] ]
+    , body =
+        [ div []
+            (List.map
+                taxonLink
+                model.taxons
+            )
+        ]
     }
+
+
+taxonLink : Taxon -> Html Msg
+taxonLink t =
+    li [] [ a [ href t.basePath ] [ text t.basePath ] ]
 
 
 
