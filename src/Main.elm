@@ -29,6 +29,7 @@ type alias Model =
     { key : Nav.Key
     , url : Url.Url
     , taxons : List Taxon
+    , error : String
     }
 
 
@@ -60,11 +61,18 @@ update msg model =
             ( model, Cmd.none )
 
         -- http request が成功したとき
-        GotPage (Ok repo) ->
+        GotPage (Ok page) ->
             {- 上の UrlChangedで渡した命令が成功したときどうするか書く -}
-            ( model, Cmd.none )
+            case decodePage page of
+                Ok ts ->
+                    ( { model | taxons = ts }
+                    , Cmd.none
+                    )
 
-        GotPage (Err repo) ->
+                Err e ->
+                    ( { model | error = Debug.toString e }, Cmd.none )
+
+        GotPage (Err page) ->
             ( model, Cmd.none )
 
 
@@ -83,7 +91,7 @@ view model =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url []
+    ( Model key url [] ""
     , Http.get
         { url = "https://www.gov.uk/api/content"
         , expect = Http.expectString GotPage
@@ -108,6 +116,11 @@ taxonDecoder =
         (D.field "api_path" D.string)
         (D.field "basePath" D.string)
         (D.field "title" D.string)
+
+
+decodePage : String -> Result D.Error (List Taxon)
+decodePage page =
+    D.decodeString (D.at [ "links", "level_one_taxons" ] (D.list taxonDecoder)) page
 
 
 
