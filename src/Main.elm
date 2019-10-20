@@ -29,8 +29,9 @@ main =
 type alias Model =
     { key : Nav.Key
     , url : Url.Url
+    , parentContentName : Maybe String
+    , contentName : String
     , taxons : List Taxon
-    , error : String
     }
 
 
@@ -58,6 +59,7 @@ update msg model =
         UrlChanged urlRequest ->
             {- TODO:
                大まかな処理としては、 url から api のパスを作って呼び出し命令 (Cmd) を出して終わり
+               なんだけどリンククリックと大差ないので後回し
             -}
             ( model, Cmd.none )
 
@@ -83,13 +85,32 @@ view model =
 
     -- you need surrounding bracket
     , body =
-        [ div []
-            (List.map
-                taxonLink
-                model.taxons
-            )
+        [ h1 []
+            [ text model.contentName ]
+        , h2 []
+            [ text (parentContent model.parentContentName) ]
+        , div [] (taxonList model.taxons)
         ]
     }
+
+
+parentContent : Maybe String -> String
+parentContent s =
+    "Parent Content: "
+        ++ (case s of
+                Just n ->
+                    n
+
+                Nothing ->
+                    "None"
+           )
+
+
+taxonList : List Taxon -> List (Html Msg)
+taxonList ts =
+    List.map
+        taxonLink
+        ts
 
 
 taxonLink : Taxon -> Html Msg
@@ -103,7 +124,7 @@ taxonLink t =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url [] ""
+    ( Model key url Nothing "Index" []
     , Http.get
         { url = apiUrl "/api/content"
         , expect = Http.expectString GotPage
