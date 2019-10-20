@@ -7,6 +7,7 @@ import Html.Attributes exposing (..)
 import Http
 import Json.Decode as D exposing (Decoder)
 import Url
+import Url.Builder
 
 
 main : Program () Model Msg
@@ -70,10 +71,10 @@ update msg model =
                     )
 
                 Err e ->
-                    ( { model | error = Debug.toString e }, Cmd.none )
+                    ( Debug.log (D.errorToString e) model, Cmd.none )
 
         GotPage (Err page) ->
-            ( model, Cmd.none )
+            ( Debug.log (Debug.toString page) model, Cmd.none )
 
 
 view : Model -> Browser.Document Msg
@@ -104,7 +105,7 @@ init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     ( Model key url [] ""
     , Http.get
-        { url = "https://www.gov.uk/api/content"
+        { url = apiUrl "/api/content"
         , expect = Http.expectString GotPage
         }
     )
@@ -125,12 +126,13 @@ taxonDecoder : Decoder Taxon
 taxonDecoder =
     D.map3 Taxon
         (D.field "api_path" D.string)
-        (D.field "basePath" D.string)
+        (D.field "base_path" D.string)
         (D.field "title" D.string)
 
 
 decodePage : String -> Result D.Error (List Taxon)
 decodePage page =
+    -- links 以外はどうでもいいので型を作ってません
     D.decodeString (D.at [ "links", "level_one_taxons" ] (D.list taxonDecoder)) page
 
 
@@ -140,4 +142,6 @@ decodePage page =
 
 apiUrl : String -> String
 apiUrl path =
-    "https://www.gov.uk/" ++ path
+    Url.Builder.crossOrigin "http://localhost:8080"
+        [ "gov" ]
+        [ Url.Builder.string "p" path ]
