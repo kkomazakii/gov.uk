@@ -29,7 +29,6 @@ main =
 type alias Model =
     { key : Nav.Key
     , url : Url.Url
-    , parentContentName : Maybe String
     , contentName : String
     , taxons : List Taxon
     }
@@ -38,7 +37,8 @@ type alias Model =
 type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
-    | GotPage (Result Http.Error String)
+    | GotIndex (Result Http.Error String)
+    | GotChild (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -47,6 +47,7 @@ update msg model =
         -- 画面遷移のリクエストがきたとき
         LinkClicked urlRequest ->
             case urlRequest of
+                -- ここの実装はこのままで終わりです。 url 書き換えだけして、 動作は書き換え(UrlChanged)に移譲します
                 -- 内部リンク
                 Browser.Internal url ->
                     ( model, Nav.pushUrl model.key (Url.toString url) )
@@ -59,14 +60,18 @@ update msg model =
         UrlChanged urlRequest ->
             {- TODO:
                大まかな処理としては、 url から api のパスを作って呼び出し命令 (Cmd) を出して終わり
-               なんだけどリンククリックと大差ないので後回し
             -}
-            ( model, Cmd.none )
+            ( { model | contentName = urlRequest.path }
+            , Http.get
+                { url = apiUrl urlRequest.path
+                , expect = Http.expectString GotChild
+                }
+            )
 
-        -- http request が成功したとき
-        GotPage (Ok page) ->
+        -- index の http request が成功したとき
+        GotIndex (Ok page) ->
             {- 上の UrlChangedで渡した命令が成功したときどうするか書く -}
-            case decodePage page of
+            case decodePage page "level_one_taxons" of
                 Ok ts ->
                     ( { model | taxons = ts }
                     , Cmd.none
@@ -75,7 +80,22 @@ update msg model =
                 Err e ->
                     ( Debug.log (D.errorToString e) model, Cmd.none )
 
-        GotPage (Err page) ->
+        GotIndex (Err page) ->
+            ( Debug.log (Debug.toString page) model, Cmd.none )
+
+        -- index 以外の http request が成功したとき
+        GotChild (Ok page) ->
+            {- 上の UrlChangedで渡した命令が成功したときどうするか書く -}
+            case decodePage page "child_taxons" of
+                Ok ts ->
+                    ( { model | taxons = ts }
+                    , Cmd.none
+                    )
+
+                Err e ->
+                    ( Debug.log (D.errorToString e) model, Cmd.none )
+
+        GotChild (Err page) ->
             ( Debug.log (Debug.toString page) model, Cmd.none )
 
 
@@ -87,8 +107,6 @@ view model =
     , body =
         [ h1 []
             [ text model.contentName ]
-        , h2 []
-            [ text (parentContent model.parentContentName) ]
         , div [] (taxonList model.taxons)
         ]
     }
@@ -118,16 +136,12 @@ taxonLink t =
     li [] [ a [ href t.basePath ] [ text t.basePath ] ]
 
 
-
--- TODO: ここでは index の api を呼んで Cmd を返す必要があります多分
-
-
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url Nothing "Index" []
+    ( Model key url "Index" []
     , Http.get
-        { url = apiUrl "/api/content"
-        , expect = Http.expectString GotPage
+        { url = apiUrl ""
+        , expect = Http.expectString GotIndex
         }
     )
 
@@ -151,10 +165,10 @@ taxonDecoder =
         (D.field "title" D.string)
 
 
-decodePage : String -> Result D.Error (List Taxon)
-decodePage page =
+decodePage : String -> String -> Result D.Error (List Taxon)
+decodePage page childKey =
     -- links 以外はどうでもいいので型を作ってません
-    D.decodeString (D.at [ "links", "level_one_taxons" ] (D.list taxonDecoder)) page
+    D.decodeString (D.at [ "links", childKey ] (D.list taxonDecoder)) page
 
 
 
